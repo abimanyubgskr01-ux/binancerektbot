@@ -4,14 +4,7 @@ import requests
 
 TELEGRAM_BOT_TOKEN = '8978692754:AAG_zOzdygCWBtibC0QPKGbmQvsqIas2xD4'
 TELEGRAM_CHAT_ID = '@BinanceFuturesREKTbot'
-WS_URL = "fstream.binance.com/ws/btcusdt@aggTrade"
-
-ws.run_forever(
-    ping_interval=30, 
-    ping_timeout=10,
-    http_proxy_host="188.166.216.12", # Contoh HTTP proxy
-    http_proxy_port=3128
-)
+WS_URL = "fstream.binance.com/ws/!forceOrder@arr"
 
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -22,21 +15,20 @@ def send_telegram_message(text):
         print(f"Failed to send Telegram message: {e}", flush=True)
 
 def on_message(ws, message):
-    print(f"RAW DATA MASUK: {message}", flush=True) # <-- Wajib tambah ini
-
+    print(f"RAW DATA MASUK: {message}", flush=True)
     try:
         data = json.loads(message)
         order = data.get('o', {})
         
         symbol = order.get('s')
+        if not symbol: return
+
         side = order.get('S')
         price = float(order.get('p'))
         qty = float(order.get('q'))
         total_value = price * qty
 
-        print(f"Liquidation detected: {symbol} {side} - Value: ${total_value:,.2f}", flush=True)
-
-        if total_value < 0:  # Filter minimal $10,000
+        if total_value < 0:  # Nanti ganti lagi jadi 10000 kalau udah beneran jalan
             return
 
         emoji = "🟢😾" if side == "BUY" else "🔴😾"
@@ -46,7 +38,7 @@ def on_message(ws, message):
         send_telegram_message(msg)
 
     except Exception as e:
-        print(f"Error parsing message: {e}", flush=True)
+        pass
 
 def on_error(ws, error):
     print(f"WebSocket error: {error}", flush=True)
@@ -55,7 +47,7 @@ def on_close(ws, close_status_code, close_msg):
     print("WebSocket closed, reconnecting...", flush=True)
 
 def on_open(ws):
-    print("Connected to Binance Liquidation WebSocket Stream!", flush=True)
+    print("Connected to Binance Liquidation WebSocket Stream via Proxy!", flush=True)
 
 if __name__ == "__main__":
     websocket.enableTrace(False)
@@ -68,7 +60,14 @@ if __name__ == "__main__":
                 on_error=on_error,
                 on_close=on_close
             )
-            ws.run_forever(ping_interval=30, ping_timeout=10)
+            print("Connecting with Proxy...", flush=True)
+            # Di sinilah ws.run_forever yang benar berada
+            ws.run_forever(
+                ping_interval=30, 
+                ping_timeout=10,
+                http_proxy_host="188.166.216.12",  # IP proxy publik
+                http_proxy_port=3128               # Port proxy publik
+            )
         except Exception as e:
             print(f"Connection lost: {e}, retrying in 5 seconds...", flush=True)
             import time
