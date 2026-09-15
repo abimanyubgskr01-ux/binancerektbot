@@ -1,62 +1,66 @@
-import time
+import json
+importwebsocket
 import requests
-import sys
 
 TELEGRAM_BOT_TOKEN = '8978692754:AAG_zOzdygCWBtibC0QPKGbmQvsqIas2xD4'
 TELEGRAM_CHAT_ID = '@BinanceFuturesREKTbot'
-BINANCE_API_URL = "https://fapi.binance.com/fapi/v1/allForceOrders"
+WS_URL = "fstream.binance.com/ws/!forceOrder@arr"
 
-def main():
-    print("Bot polling loop started directly...", flush=True)
-    processed_orders = set()
+def send_telegram_message(text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+    try:
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        print(f"Failed to send Telegram message: {e}", flush=True)
 
-    while True:
-        try:
-            print("Fetching data from Binance...", flush=True)
-            response = requests.get(BINANCE_API_URL, timeout=10)
-            print(f"Binance HTTP Status: {response.status_code}", flush=True)
-            
-            if response.status_code == 200:
-                orders = response.json()
-                print(f"Checked Binance: {len(orders)} active orders found.", flush=True)
+def on_message(ws, message):
+    try:
+        data = json.loads(message)
+        order = data.get('o', {})
+        
+        symbol = order.get('s')
+        side = order.get('S')
+        price = float(order.get('p'))
+        qty = float(order.get('q'))
+        total_value = price * qty
 
-                for order in orders:
-                    order_id = f"{order.get('s')}_{order.get('T')}_{order.get('q')}"
+        print(f"Liquidation detected: {symbol} {side} - Value: ${total_value:,.2f}", flush=True)
 
-                    if order_id in processed_orders:
-                        continue
+        if total_value < 0:  # Filter minimal $10,000
+            return
 
-                    symbol = order.get('s')
-                    side = order.get('S')
-                    price = float(order.get('p'))
-                    qty = float(order.get('q'))
-                    total_value = price * qty
+        emoji = "🟢😾" if side == "BUY" else "🔴😾"
+        msg = f"{emoji} <b>{symbol}</b> {side} {int(qty):,} @ {price:.8f}".rstrip('0').rstrip('.')
+        
+        print(f"Alert sent: {msg}", flush=True)
+        send_telegram_message(msg)
 
-                    processed_orders.add(order_id)
-                    if len(processed_orders) > 500:
-                        processed_orders.pop()
+    except Exception as e:
+        print(f"Error parsing message: {e}", flush=True)
 
-                    if total_value < 0:  # Filter minimal $10,000
-                        continue
+def on_error(ws, error):
+    print(f"WebSocket error: {error}", flush=True)
 
-                    if side == "BUY":
-                        emoji = "🟢😾"
-                    else:
-                        emoji = "🔴😾"
+def on_close(ws, close_status_code, close_msg):
+    print("WebSocket closed, reconnecting...", flush=True)
 
-                    msg = f"{emoji} <b>{symbol}</b> {side} {int(qty):,} @ {price:.8f}".rstrip('0').rstrip('.')
-                    print(f"Alert sent: {msg}", flush=True)
-                    
-                    # Kirim ke Telegram
-                    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-                    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}
-                    requests.post(url, json=payload, timeout=5)
-
-            time.sleep(3)
-
-        except Exception as e:
-            print(f"Error in main loop: {e}", flush=True)
-            time.sleep(5)
+def on_open(ws):
+    print("Connected to Binance Liquidation WebSocket Stream!", flush=True)
 
 if __name__ == "__main__":
-    main()
+    websocket.enableTrace(False)
+    while True:
+        try:
+            ws = websocket.WebSocketApp(
+                f"wss://{WS_URL}",
+                on_open=on_open,
+                on_message=on_message,
+                on_error=on_error,
+                on_close=on_close
+            )
+            ws.run_forever(ping_interval=30, ping_timeout=10)
+        except Exception as e:
+            print(f"Connection lost: {e}, retrying in 5 seconds...", flush=True)
+            import time
+            time.sleep(5)
