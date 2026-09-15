@@ -5,34 +5,16 @@ TELEGRAM_BOT_TOKEN = '8978692754:AAG_zOzdygCWBtibC0QPKGbmQvsqIas2xD4'
 TELEGRAM_CHAT_ID = '@BinanceFuturesREKTbot'
 BINANCE_API_URL = "https://fapi.binance.com/fapi/v1/allForceOrders"
 
-def send_telegram_message(text):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML"
-    }
-    try:
-        response = requests.post(url, json=payload, timeout=5)
-        print(f"Telegram response: {response.status_code}")
-    except Exception as e:
-        print(f"Failed to send Telegram message: {e}")
-
 def main():
-    print("Bot polling loop started...")
+    print("Bot polling loop started directly...")
     processed_orders = set()
-
-    send_telegram_message("🟢 <b>Bot Binance Liquidation siap jalan di Railway!</b>")
 
     while True:
         try:
             response = requests.get(BINANCE_API_URL, timeout=10)
             if response.status_code == 200:
                 orders = response.json()
-                
-                # --- TAMBAHAN LOG PEMANTAU ---
-                print(f"Checked Binance: {len(orders)} active liquidation orders found.")
-                # -----------------------------
+                print(f"Checked Binance: {len(orders)} active orders found.")
 
                 for order in orders:
                     order_id = f"{order.get('s')}_{order.get('T')}_{order.get('q')}"
@@ -50,8 +32,7 @@ def main():
                     if len(processed_orders) > 500:
                         processed_orders.pop()
 
-                    # Sesuaikan batas minimal filter nilai likuidasi (misal: 10000 untuk $10,000)
-                    if total_value < 0:  
+                    if total_value < 0:  # Filter minimal $10,000
                         continue
 
                     if side == "BUY":
@@ -61,7 +42,11 @@ def main():
 
                     msg = f"{emoji} <b>{symbol}</b> {side} {int(qty):,} @ {price:.8f}".rstrip('0').rstrip('.')
                     print(f"Alert sent: {msg}")
-                    send_telegram_message(msg)
+                    
+                    # Kirim langsung ke Telegram
+                    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+                    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}
+                    requests.post(url, json=payload, timeout=5)
 
             time.sleep(3)
 
