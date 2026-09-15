@@ -4,7 +4,7 @@ import requests
 
 TELEGRAM_BOT_TOKEN = '8978692754:AAG_zOzdygCWBtibC0QPKGbmQvsqIas2xD4'
 TELEGRAM_CHAT_ID = '@BinanceFuturesREKTbot'
-WS_URL = "fstream.binance.com/ws/!forceOrder@arr"
+WS_URL = "fstream.binance.com/ws/btcusdt@aggTrade"
 
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -15,6 +15,8 @@ def send_telegram_message(text):
         print(f"Failed to send Telegram message: {e}", flush=True)
 
 def on_message(ws, message):
+    print(f"RAW DATA MASUK: {message}", flush=True) # <-- Wajib tambah ini
+
     try:
         data = json.loads(message)
         order = data.get('o', {})
