@@ -1,19 +1,20 @@
 import time
 import requests
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
 import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- Dummy Web Server untuk Render Free Tier ---
+# --- Mini Web Server agar Railway tidak mematikan kontainer ---
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bot is running!")
+        self.wfile.write(b"Bot is alive and running 24/7!")
 
 def run_web_server():
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(('0.0.0.0', port), SimpleHandler)
+    print(f"Web server started on port {port}")
     server.serve_forever()
 
 # --- Konfigurasi Bot Telegram & Binance ---
@@ -29,13 +30,17 @@ def send_telegram_message(text):
         "parse_mode": "HTML"
     }
     try:
-        requests.post(url, json=payload, timeout=5)
+        response = requests.post(url, json=payload, timeout=5)
+        print(f"Telegram response: {response.status_code}")
     except Exception as e:
         print(f"Failed to send Telegram message: {e}")
 
 def run_bot():
-    print("Bot loop started...")
+    print("Bot polling loop started...")
     processed_orders = set()
+    
+    # Tes kirim pesan penanda bot nyala
+    send_telegram_message("🟢 <b>Bot Binance Liquidation berhasil aktif di Railway!</b>")
     
     while True:
         try:
@@ -58,7 +63,7 @@ def run_bot():
                     if len(processed_orders) > 500:
                         processed_orders.pop()
                         
-                    # Filter minimal nilai (atur ke 0 atau sesuai kebutuhan)
+                    # Filter minimal nilai likuidasi (ubah ke 0 dulu untuk tes awal)
                     if total_value < 0:
                         continue
                         
@@ -78,7 +83,7 @@ def run_bot():
             time.sleep(5)
 
 if __name__ == "__main__":
-    # Jalankan web server di background thread agar Render mendeteksi port aktif
+    # Jalankan web server di background thread agar kontainer tidak di-stop Railway
     threading.Thread(target=run_web_server, daemon=True).start()
     # Jalankan bot utama
     run_bot()
