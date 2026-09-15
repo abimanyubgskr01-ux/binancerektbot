@@ -1,5 +1,5 @@
 import json
-importwebsocket
+import websocket
 import requests
 
 TELEGRAM_BOT_TOKEN = '8978692754:AAG_zOzdygCWBtibC0QPKGbmQvsqIas2xD4'
