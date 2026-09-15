@@ -6,6 +6,13 @@ TELEGRAM_BOT_TOKEN = '8978692754:AAG_zOzdygCWBtibC0QPKGbmQvsqIas2xD4'
 TELEGRAM_CHAT_ID = '@BinanceFuturesREKTbot'
 WS_URL = "fstream.binance.com/ws/btcusdt@aggTrade"
 
+ws.run_forever(
+    ping_interval=30, 
+    ping_timeout=10,
+    http_proxy_host="188.166.216.12", # Contoh HTTP proxy
+    http_proxy_port=3128
+)
+
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
