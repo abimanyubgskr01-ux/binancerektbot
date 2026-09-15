@@ -45,7 +45,7 @@ def main():
                     if len(processed_orders) > 500:
                         processed_orders.pop()
 
-                    if total_value < 10000:  # Filter minimal $10,000
+                    if total_value < 0:  # Filter minimal $10,000
                         continue
 
                     if side == "BUY":
