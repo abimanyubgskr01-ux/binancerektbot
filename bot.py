@@ -59,7 +59,7 @@ def run_bot():
                         processed_orders.pop()
                         
                     # Filter minimal nilai (atur ke 0 atau sesuai kebutuhan)
-                    if total_value < 10000:
+                    if total_value < 0:
                         continue
                         
                     if side == "BUY":
