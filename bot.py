@@ -1,20 +1,24 @@
 import time
 import requests
+import sys
 
 TELEGRAM_BOT_TOKEN = '8978692754:AAG_zOzdygCWBtibC0QPKGbmQvsqIas2xD4'
 TELEGRAM_CHAT_ID = '@BinanceFuturesREKTbot'
 BINANCE_API_URL = "https://fapi.binance.com/fapi/v1/allForceOrders"
 
 def main():
-    print("Bot polling loop started directly...")
+    print("Bot polling loop started directly...", flush=True)
     processed_orders = set()
 
     while True:
         try:
+            print("Fetching data from Binance...", flush=True)
             response = requests.get(BINANCE_API_URL, timeout=10)
+            print(f"Binance HTTP Status: {response.status_code}", flush=True)
+            
             if response.status_code == 200:
                 orders = response.json()
-                print(f"Checked Binance: {len(orders)} active orders found.")
+                print(f"Checked Binance: {len(orders)} active orders found.", flush=True)
 
                 for order in orders:
                     order_id = f"{order.get('s')}_{order.get('T')}_{order.get('q')}"
@@ -41,9 +45,9 @@ def main():
                         emoji = "🔴😾"
 
                     msg = f"{emoji} <b>{symbol}</b> {side} {int(qty):,} @ {price:.8f}".rstrip('0').rstrip('.')
-                    print(f"Alert sent: {msg}")
+                    print(f"Alert sent: {msg}", flush=True)
                     
-                    # Kirim langsung ke Telegram
+                    # Kirim ke Telegram
                     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
                     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}
                     requests.post(url, json=payload, timeout=5)
@@ -51,7 +55,7 @@ def main():
             time.sleep(3)
 
         except Exception as e:
-            print(f"Error in main loop: {e}")
+            print(f"Error in main loop: {e}", flush=True)
             time.sleep(5)
 
 if __name__ == "__main__":
