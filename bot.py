@@ -28,7 +28,7 @@ def on_message(ws, message):
         qty = float(order.get('q'))
         total_value = price * qty
 
-        if total_value < 0:  # Nanti ganti lagi jadi 10000 kalau udah beneran jalan
+        if total_value < 10000:  # Minimal $10,000
             return
 
         emoji = "🟢😾" if side == "BUY" else "🔴😾"
@@ -61,12 +61,12 @@ if __name__ == "__main__":
                 on_close=on_close
             )
             print("Connecting with Proxy...", flush=True)
-            # Di sinilah ws.run_forever yang benar berada
             ws.run_forever(
                 ping_interval=30, 
                 ping_timeout=10,
-                http_proxy_host="188.166.216.12",  # IP proxy publik
-                http_proxy_port=3128               # Port proxy publik
+                http_proxy_host="188.166.216.12",
+                http_proxy_port=3128,
+                proxy_type="http"
             )
         except Exception as e:
             print(f"Connection lost: {e}, retrying in 5 seconds...", flush=True)
