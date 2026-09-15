@@ -29,6 +29,11 @@ def main():
             response = requests.get(BINANCE_API_URL, timeout=10)
             if response.status_code == 200:
                 orders = response.json()
+                
+                # --- TAMBAHAN LOG PEMANTAU ---
+                print(f"Checked Binance: {len(orders)} active liquidation orders found.")
+                # -----------------------------
+
                 for order in orders:
                     order_id = f"{order.get('s')}_{order.get('T')}_{order.get('q')}"
 
@@ -45,7 +50,8 @@ def main():
                     if len(processed_orders) > 500:
                         processed_orders.pop()
 
-                    if total_value < 0:  # Filter minimal $10,000
+                    # Sesuaikan batas minimal filter nilai likuidasi (misal: 10000 untuk $10,000)
+                    if total_value < 0:  
                         continue
 
                     if side == "BUY":
