@@ -3,24 +3,38 @@ import websocket
 import requests
 import time
 import threading
+import os
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 TELEGRAM_BOT_TOKEN = '8978692754:AAG_zOzdygCWBtibC0QPKGbmQvsqIas2xD4'
 TELEGRAM_CHAT_ID = '@BinanceFuturesREKTbot'
 
+# ====================================================
+# INI OBATNYA BIAR RAILWAY NGGAK NGE-RESTART BOT LU
+# ====================================================
+def run_dummy_server():
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot is running mantap!")
+            
+    # Railway otomatis ngasih environment variable PORT
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), Handler)
+    print(f"Dummy web server jalan di port {port} buat ngakalin Railway...", flush=True)
+    server.serve_forever()
+
 def get_top_100_streams():
     try:
-        print("Mengambil daftar Top 100 koin Binance Futures...", flush=True)
         res = requests.get("https://fapi.binance.com/fapi/v1/exchangeInfo", timeout=10)
         data = res.json()
-        # Ambil 100 koin aktif aja
         symbols = [s['symbol'].lower() for s in data['symbols'] if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING'][:100]
         return [f"{s}@aggTrade" for s in symbols]
-    except Exception as e:
-        print("Gagal ambil daftar, pakai fallback...", flush=True)
+    except Exception:
         return ['btcusdt@aggTrade']
 
 def send_telegram_message(text):
-    # KITA PAKAI THREADING: Biar ngirim Telegram nggak bikin macet data Binance!
     def _send():
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
@@ -43,8 +57,7 @@ def on_message(ws, message):
         qty = float(data.get('q'))
         total_value = price * qty
 
-        # KEMBALI KE HABITAT PAUS: Filter minimal transaksi $50,000
-        # Biar Railway lu ga jebol lagi!
+        # Tahan di $50,000 ya, biar telegram lu ga meledak
         if total_value < 50000:
             return
 
@@ -71,6 +84,10 @@ def on_open(ws):
 
 if __name__ == "__main__":
     websocket.enableTrace(False) 
+    
+    # NYALAKAN SERVER BOHONGAN DI BACKGROUND
+    threading.Thread(target=run_dummy_server, daemon=True).start()
+    
     while True:
         try:
             streams = get_top_100_streams()
