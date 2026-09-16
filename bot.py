@@ -1,16 +1,22 @@
 import json
 import websocket
 import requests
+import time
 
 TELEGRAM_BOT_TOKEN = '8978692754:AAG_zOzdygCWBtibC0QPKGbmQvsqIas2xD4'
 TELEGRAM_CHAT_ID = '@BinanceFuturesREKTbot'
 
-# 1. Tulis koin-koin yang mau lu pantau di sini (Wajib huruf kecil dan pakai 'usdt' di belakangnya)
-COINS = ['btcusdt', 'ethusdt', 'solusdt', 'bnbusdt', 'dogeusdt', 'pepeusdt']
-
-# 2. Format URL untuk gabungin banyak koin dalam 1 stream
-STREAMS = '/'.join([f"{coin}@aggTrade" for coin in COINS])
-WS_URL = f"fstream.binance.com/stream?streams={STREAMS}"
+def get_all_usdt_symbols():
+    try:
+        print("Mengambil daftar seluruh koin Binance Futures...", flush=True)
+        res = requests.get("https://fapi.binance.com/fapi/v1/exchangeInfo", timeout=10)
+        data = res.json()
+        # Filter otomatis hanya koin berpasangan USDT yang sedang aktif (trading)
+        symbols = [s['symbol'].lower() for s in data['symbols'] if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING']
+        return symbols
+    except Exception as e:
+        print(f"Gagal mengambil daftar koin: {e}", flush=True)
+        return ['btcusdt', 'ethusdt', 'solusdt'] # Fallback darurat
 
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -22,11 +28,9 @@ def send_telegram_message(text):
 
 def on_message(ws, message):
     try:
-        payload = json.loads(message)
+        data = json.loads(message)
         
-        # Karena kita langganan banyak stream, datanya dibungkus di dalam key 'data'
-        data = payload.get('data', {})
-        
+        # Cuma proses data transaksi trade
         if data.get('e') != 'aggTrade': 
             return
 
@@ -36,12 +40,10 @@ def on_message(ws, message):
         total_value = price * qty
         is_buyer_maker = data.get('m')
 
-        # 3. FILTER VOLUME PAUS (Contoh: Notif hanya kalau ada transaksi di atas $50,000)
-        # Lu bisa atur angka ini sesuai rasio risk-to-reward lu
+        # FILTER VOLUME (Tinggal ganti angka ini. Sekarang settingnya minimal $50,000)
         if total_value < 50000:
             return
 
-        # Di sistem Binance: kalau Taker is Maker (True) = SELL. Kalau False = BUY.
         side = "🔴 SELL" if is_buyer_maker else "🟢 BUY"
         emoji = "🐋" if total_value > 100000 else "🦈"
         
@@ -50,7 +52,7 @@ def on_message(ws, message):
         print(f"Alert sent: {symbol} {side} ${total_value:,.2f}", flush=True)
         send_telegram_message(msg)
 
-    except Exception as e:
+    except Exception:
         pass
 
 def on_error(ws, error):
@@ -60,22 +62,37 @@ def on_close(ws, close_status_code, close_msg):
     print("WebSocket closed, reconnecting...", flush=True)
 
 def on_open(ws):
-    print("Connected to Binance Whale Alert Stream!", flush=True)
+    print("Connected to WebSocket! Memulai proses langganan...", flush=True)
+    symbols = get_all_usdt_symbols()
+    streams = [f"{s}@aggTrade" for s in symbols]
+    
+    # Kita pecah per 50 koin supaya server Binance nggak langsung mutus koneksi (Rate Limit)
+    chunk_size = 50
+    for i in range(0, len(streams), chunk_size):
+        chunk = streams[i:i + chunk_size]
+        sub_msg = {
+            "method": "SUBSCRIBE",
+            "params": chunk,
+            "id": i
+        }
+        ws.send(json.dumps(sub_msg))
+        time.sleep(1) # Kasih jeda napas ke server Binance
+        
+    print(f"SUKSES! Bot sekarang memantau {len(streams)} koin secara real-time!", flush=True)
 
 if __name__ == "__main__":
-    websocket.enableTrace(False) # Gue matiin trace-nya biar log lu nggak nyampah
+    websocket.enableTrace(False) 
     while True:
         try:
             ws = websocket.WebSocketApp(
-                f"wss://{WS_URL}",
+                "wss://fstream.binance.com/ws", # Hit langsung ke jalur utamanya
                 on_open=on_open,
                 on_message=on_message,
                 on_error=on_error,
                 on_close=on_close
             )
-            print(f"Connecting to streams: {STREAMS}", flush=True)
+            print("Connecting to Binance Global Stream...", flush=True)
             ws.run_forever(ping_interval=30, ping_timeout=10)
         except Exception as e:
             print(f"Connection lost, retrying in 5 seconds...", flush=True)
-            import time
             time.sleep(5)
