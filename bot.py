@@ -11,7 +11,6 @@ def get_all_usdt_symbols():
         print("Mengambil daftar koin Binance Futures...", flush=True)
         res = requests.get("https://fapi.binance.com/fapi/v1/exchangeInfo", timeout=10)
         data = res.json()
-        # LIMIT: Ambil 150 koin pertama aja, soalnya Binance cuma ngizinin maksimal 200 stream per koneksi!
         symbols = [s['symbol'].lower() for s in data['symbols'] if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING'][:150]
         return symbols
     except Exception as e:
@@ -22,30 +21,36 @@ def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
     try:
-        requests.post(url, json=payload, timeout=5)
-    except Exception:
-        pass
+        res = requests.post(url, json=payload, timeout=5)
+        if res.status_code != 200:
+            print(f"Telegram nolak ngirim: {res.text}", flush=True)
+    except Exception as e:
+        print(f"Gagal konek ke Telegram: {e}", flush=True)
 
 def on_message(ws, message):
     try:
-        data = json.loads(message)
+        payload = json.loads(message)
         
-        # Tangkap pesan konfirmasi dari Binance kalau proses subscribe berhasil
-        if 'result' in data or 'id' in data:
-            print(f"System: {message}", flush=True)
+        # Abaikan pesan konfirmasi dari Binance
+        if 'result' in payload or 'id' in payload:
             return
             
+        # Kadang Binance membungkus data stream di dalam key 'data'
+        data = payload.get('data', payload)
+        
         if data.get('e') != 'aggTrade': 
             return
 
         symbol = data.get('s')
+        if not symbol: return
+        
         price = float(data.get('p'))
         qty = float(data.get('q'))
         total_value = price * qty
         is_buyer_maker = data.get('m')
 
-        # FILTER VOLUME (Diturunin ke $10,000 dulu buat ngetes biar datanya cepet keluar)
-        if total_value < 10000:
+        # FILTER SEMENTARA DIUBAH JADI $1 BIAR KETAHUAN DATANYA MASUK ATAU NGGAK
+        if total_value < 1:
             return
 
         side = "🔴 SELL" if is_buyer_maker else "🟢 BUY"
@@ -56,8 +61,9 @@ def on_message(ws, message):
         print(f"Alert sent: {symbol} {side} ${total_value:,.2f}", flush=True)
         send_telegram_message(msg)
 
-    except Exception:
-        pass
+    except Exception as e:
+        # NAH INI DIA BIANG KEROKNYA KALO ADA YANG ERROR PAS PARSING!
+        print(f"BONGKAR ERROR: {e} | Raw Data: {message[:100]}...", flush=True)
 
 def on_error(ws, error):
     print(f"WebSocket error: {error}", flush=True)
@@ -79,7 +85,7 @@ def on_open(ws):
             "id": i
         }
         ws.send(json.dumps(sub_msg))
-        time.sleep(1) # Jeda aman biar ga ditolak server
+        time.sleep(1)
         
     print(f"SUKSES! Bot sekarang memantau {len(streams)} koin secara real-time!", flush=True)
 
