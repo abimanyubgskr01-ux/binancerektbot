@@ -8,15 +8,15 @@ TELEGRAM_CHAT_ID = '@BinanceFuturesREKTbot'
 
 def get_all_usdt_symbols():
     try:
-        print("Mengambil daftar seluruh koin Binance Futures...", flush=True)
+        print("Mengambil daftar koin Binance Futures...", flush=True)
         res = requests.get("https://fapi.binance.com/fapi/v1/exchangeInfo", timeout=10)
         data = res.json()
-        # Filter otomatis hanya koin berpasangan USDT yang sedang aktif (trading)
-        symbols = [s['symbol'].lower() for s in data['symbols'] if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING']
+        # LIMIT: Ambil 150 koin pertama aja, soalnya Binance cuma ngizinin maksimal 200 stream per koneksi!
+        symbols = [s['symbol'].lower() for s in data['symbols'] if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING'][:150]
         return symbols
     except Exception as e:
         print(f"Gagal mengambil daftar koin: {e}", flush=True)
-        return ['btcusdt', 'ethusdt', 'solusdt'] # Fallback darurat
+        return ['btcusdt', 'ethusdt', 'solusdt']
 
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -30,7 +30,11 @@ def on_message(ws, message):
     try:
         data = json.loads(message)
         
-        # Cuma proses data transaksi trade
+        # Tangkap pesan konfirmasi dari Binance kalau proses subscribe berhasil
+        if 'result' in data or 'id' in data:
+            print(f"System: {message}", flush=True)
+            return
+            
         if data.get('e') != 'aggTrade': 
             return
 
@@ -40,12 +44,12 @@ def on_message(ws, message):
         total_value = price * qty
         is_buyer_maker = data.get('m')
 
-        # FILTER VOLUME (Tinggal ganti angka ini. Sekarang settingnya minimal $50,000)
-        if total_value < 50000:
+        # FILTER VOLUME (Diturunin ke $10,000 dulu buat ngetes biar datanya cepet keluar)
+        if total_value < 10000:
             return
 
         side = "🔴 SELL" if is_buyer_maker else "🟢 BUY"
-        emoji = "🐋" if total_value > 100000 else "🦈"
+        emoji = "🐋" if total_value > 50000 else "🦈"
         
         msg = f"{emoji} <b>{symbol}</b> {side}\n💰 Value: ${total_value:,.2f}\n📦 Qty: {qty:,.2f} @ {price:.8f}"
         
@@ -66,7 +70,6 @@ def on_open(ws):
     symbols = get_all_usdt_symbols()
     streams = [f"{s}@aggTrade" for s in symbols]
     
-    # Kita pecah per 50 koin supaya server Binance nggak langsung mutus koneksi (Rate Limit)
     chunk_size = 50
     for i in range(0, len(streams), chunk_size):
         chunk = streams[i:i + chunk_size]
@@ -76,7 +79,7 @@ def on_open(ws):
             "id": i
         }
         ws.send(json.dumps(sub_msg))
-        time.sleep(1) # Kasih jeda napas ke server Binance
+        time.sleep(1) # Jeda aman biar ga ditolak server
         
     print(f"SUKSES! Bot sekarang memantau {len(streams)} koin secara real-time!", flush=True)
 
@@ -85,7 +88,7 @@ if __name__ == "__main__":
     while True:
         try:
             ws = websocket.WebSocketApp(
-                "wss://fstream.binance.com/ws", # Hit langsung ke jalur utamanya
+                "wss://fstream.binance.com/ws",
                 on_open=on_open,
                 on_message=on_message,
                 on_error=on_error,
