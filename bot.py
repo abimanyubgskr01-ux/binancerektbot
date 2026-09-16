@@ -15,11 +15,10 @@ def send_telegram_message(text):
         print(f"Failed to send Telegram message: {e}", flush=True)
 
 def on_message(ws, message):
-    print(f"RAW DATA MASUK: {message}", flush=True)
+    print(f"RAW DATA: {message}", flush=True)
     try:
         data = json.loads(message)
         order = data.get('o', {})
-        
         symbol = order.get('s')
         if not symbol: return
 
@@ -28,15 +27,13 @@ def on_message(ws, message):
         qty = float(order.get('q'))
         total_value = price * qty
 
-        if total_value < 10000:  # Minimal $10,000
+        if total_value < 0:  # Ubah ke 10000 kalau udah bener
             return
 
         emoji = "🟢😾" if side == "BUY" else "🔴😾"
         msg = f"{emoji} <b>{symbol}</b> {side} {int(qty):,} @ {price:.8f}".rstrip('0').rstrip('.')
         
-        print(f"Alert sent: {msg}", flush=True)
         send_telegram_message(msg)
-
     except Exception as e:
         pass
 
@@ -44,13 +41,15 @@ def on_error(ws, error):
     print(f"WebSocket error: {error}", flush=True)
 
 def on_close(ws, close_status_code, close_msg):
-    print("WebSocket closed, reconnecting...", flush=True)
+    print(f"WebSocket closed! Code: {close_status_code}, Msg: {close_msg}", flush=True)
 
 def on_open(ws):
-    print("Connected to Binance Liquidation WebSocket Stream via Proxy!", flush=True)
+    print("Connected to WebSocket!", flush=True)
 
 if __name__ == "__main__":
-    websocket.enableTrace(False)
+    # INI YANG BAKAL BONGKAR SEMUANYA
+    websocket.enableTrace(True) 
+    
     while True:
         try:
             ws = websocket.WebSocketApp(
@@ -60,15 +59,9 @@ if __name__ == "__main__":
                 on_error=on_error,
                 on_close=on_close
             )
-            print("Connecting with Proxy...", flush=True)
-            ws.run_forever(
-                ping_interval=30, 
-                ping_timeout=10,
-                http_proxy_host="188.166.216.12",
-                http_proxy_port=3128,
-                proxy_type="http"
-            )
+            print("Connecting directly to Binance (No Proxy)...", flush=True)
+            ws.run_forever(ping_interval=30, ping_timeout=10)
         except Exception as e:
-            print(f"Connection lost: {e}, retrying in 5 seconds...", flush=True)
+            print(f"Fatal error: {e}", flush=True)
             import time
             time.sleep(5)
